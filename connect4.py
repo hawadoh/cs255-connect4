@@ -1,9 +1,25 @@
 import numpy as np
+import pygame
+import sys
+import math
 
 # In classic Connect 4, these are the parameters
 ROW_COUNT = 6
 COLUMN_COUNT = 7
 WINNING_CHAIN_LENGTH = 4
+
+SQUARE_SIZE = 100
+RADIUS = int(SQUARE_SIZE / 2 - 5)
+OFFSET = int(SQUARE_SIZE / 2)
+width = SQUARE_SIZE * COLUMN_COUNT
+height = SQUARE_SIZE * (ROW_COUNT + 1) # For the insertion row
+size = (width, height)
+
+BLUE = (0, 0, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+YELLOW = (255, 255, 0)
+GREEN = (50, 205, 50)
 
 def create_board():
     return np.zeros((ROW_COUNT, COLUMN_COUNT))
@@ -28,52 +44,102 @@ def winning_move(board, piece):
     for r in range(ROW_COUNT):
         for c in range(COLUMN_COUNT - limit):
             if all(board[r][c + i] == piece for i in range(WINNING_CHAIN_LENGTH)):
-                return True
+                return True, [(r, c + i) for i in range(WINNING_CHAIN_LENGTH)]
 
     # Check vertical locations for a win
     for c in range(COLUMN_COUNT):
         for r in range(ROW_COUNT - limit):
             if all(board[r + i][c] == piece for i in range(WINNING_CHAIN_LENGTH)):
-                return True
+                return True, [(r + i, c) for i in range(WINNING_CHAIN_LENGTH)]
 
     # Check positively sloped diagonals
     for r in range(ROW_COUNT - limit):
         for c in range(COLUMN_COUNT - limit):
             if all(board[r + i][c + i] == piece for i in range(WINNING_CHAIN_LENGTH)):
-                return True
+                return True, [(r + i, c + i) for i in range(WINNING_CHAIN_LENGTH)]
 
     # Check negatively sloped diagonals
     for r in range(WINNING_CHAIN_LENGTH - 1, ROW_COUNT):
         for c in range(COLUMN_COUNT - limit):
             if all(board[r - i][c + i] == piece for i in range(WINNING_CHAIN_LENGTH)):
-                return True
+                return True, [(r - i, c + i) for i in range(WINNING_CHAIN_LENGTH)]
 
-    return False
+    return False, []
 
 board = create_board()
 print_board(board)
 game_over = False
 turn = 0
 
-while not game_over:
-    try:
-        if turn == 0:
-            selection = int(input("Player 1 Make your selection (0-6): "))
-        else:
-            selection = int(input("Player 2 Make your selection (0-6): "))
+def draw_board(board, screen):
+    for c in range(COLUMN_COUNT):
+        for r in range(ROW_COUNT):
+            pygame.draw.rect(screen, BLUE, (c * SQUARE_SIZE, r * SQUARE_SIZE + SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+            pygame.draw.circle(screen, BLACK, (c * SQUARE_SIZE + OFFSET, r * SQUARE_SIZE + SQUARE_SIZE + OFFSET), RADIUS)
+    for c in range(COLUMN_COUNT):
+        for r in range(ROW_COUNT):
+            if board[r][c] == 1:
+                pygame.draw.circle(screen, RED, (c * SQUARE_SIZE + OFFSET, height - r * SQUARE_SIZE - SQUARE_SIZE + OFFSET), RADIUS)
+            elif board[r][c] == 2:
+                pygame.draw.circle(screen, YELLOW, (c * SQUARE_SIZE + OFFSET, height - r * SQUARE_SIZE - SQUARE_SIZE + OFFSET), RADIUS)
+    pygame.display.update()
 
-        if is_valid_location(board, selection):
-            row = get_next_open_row(board, selection)
-            piece = 1 if turn == 0 else 2
-            drop_piece(board, row, selection, piece)
-            print_board(board)
+pygame.init()
 
-            if winning_move(board, piece):
-                print(f"PLAYER {piece} WINS!")
-                game_over = True
-            else:
-                turn = (turn + 1) % 2
+screen = pygame.display.set_mode(size)
+draw_board(board, screen)
+
+while True: # Keep running until the user closes the game
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
+        if not game_over: # Only process hover and click events during gameplay
+            if event.type == pygame.MOUSEMOTION:
+                # Clear the hover area and draw the hover circle
+                pygame.draw.rect(screen, BLACK, (0, 0, width, SQUARE_SIZE))
+                colour = RED if turn == 0 else YELLOW        
+                pygame.draw.circle(screen, colour, (event.pos[0], OFFSET), RADIUS)    
+                pygame.display.update()
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                player = 1 if turn == 0 else 2
+                # selection = int(input(f"Player {player} Make your selection (0-{COLUMN_COUNT-1}): ")) # CLI-based
+                selection = math.floor(event.pos[0] / SQUARE_SIZE) # GUI-based column selection
+
+                if is_valid_location(board, selection):
+                    row = get_next_open_row(board, selection)
+                    piece = 1 if turn == 0 else 2
+                    drop_piece(board, row, selection, piece)
+                    print_board(board)
+                    draw_board(board, screen)
+
+                    has_won, win_coords = winning_move(board, piece)
+                    if has_won:
+                        print(f"PLAYER {piece} WINS!")
+                        font = pygame.font.SysFont("monospace", 75)
+                        label = font.render(f"Player {piece} wins!", 1, RED if piece == 1 else YELLOW)
+                        pygame.draw.rect(screen, BLACK, (0, 0, width, SQUARE_SIZE)) # Reset insertion column
+                        screen.blit(label, (40, 10))
+                        pygame.display.update()
+
+                        # Draw the winning line
+                        start = (win_coords[0][1] * SQUARE_SIZE + OFFSET, height - win_coords[0][0] * SQUARE_SIZE - OFFSET)
+                        end = (win_coords[-1][1] * SQUARE_SIZE + OFFSET, height - win_coords[-1][0] * SQUARE_SIZE - OFFSET)
+                        pygame.draw.line(screen, GREEN, start, end, 10)
+                        pygame.display.update()
+
+                        game_over = True
+                    else:
+                        turn = (turn + 1) % 2
+                else:
+                    print("Invalid selection. Column is full or out of range. Try again.")
         else:
-            print("Invalid selection. Column is full or out of range. Try again.")
-    except ValueError:
-        print("Invalid input. Please enter an integer between 0 and 6.")
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                # Reset game state
+                board = create_board()
+                draw_board(board, screen)
+                game_over = False
+                turn = 0
+                print("Game restarted!")
