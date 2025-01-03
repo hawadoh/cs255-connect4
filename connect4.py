@@ -133,7 +133,22 @@ while True: # Keep running until the user closes the game
                         game_over = True
                         print("Press SPACEBAR to start a new game.")
                     else:
-                        turn = (turn + 1) % 2
+                        # Check for a draw
+                        if not any(board[ROW_COUNT - 1][c] == 0 for c in range(COLUMN_COUNT)):
+                            print("Draw!")
+                            font = pygame.font.SysFont("monospace", 75)
+                            label = font.render("Draw!", 1, GREEN)
+                            # Calculate the centre position for the text
+                            text_width, text_height = font.size("Draw!")
+                            text_x = (width - text_width) // 2
+                            text_y = (SQUARE_SIZE - text_height) // 2 # Centre it in the top row
+                            pygame.draw.rect(screen, BLACK, (0, 0, width, SQUARE_SIZE)) # Clear the top row
+                            screen.blit(label, (text_x, text_y)) # Blit the text at the centred position
+                            pygame.display.update()
+                            game_over = True
+                            print("Press SPACEBAR to start a new game.")
+                        else:
+                            turn = (turn + 1) % 2
                 else:
                     print("Invalid selection. Column is full or out of range. Try again.")
         else:
