@@ -131,6 +131,7 @@ while True: # Keep running until the user closes the game
                         pygame.display.update()
 
                         game_over = True
+                        print("Press SPACEBAR to start a new game.")
                     else:
                         turn = (turn + 1) % 2
                 else:
